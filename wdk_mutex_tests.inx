@@ -1,0 +1,64 @@
+﻿;===================================================================
+; Sample WDM Driver
+; Copyright (c) Microsoft Corporation
+;===================================================================
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = wdk_mutex_tests
+ClassGuid   = {55539780-17F9-4F0D-9F45-DDAED979E7D0}
+Provider    = %ProviderString%
+PnpLockDown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+wdk_mutex_tests.sys = 1
+
+; ================= Class section =====================
+
+[ClassInstall32]
+Addreg=WMTClassReg
+
+[WMTClassReg]
+HKR,,,0,%ClassName%
+HKR,,Icon,,-5
+
+; ================= Install section =================
+
+[Manufacturer]
+%StdMfg%=Standard,NT$ARCH$.10.0...16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%DeviceDesc%=WMTWDMDevice, root\SAMPLE_WDM_HW_ID
+
+[WMTWDMDevice.NT$ARCH$]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+wdk_mutex_tests.sys
+
+; ================= Service installation =================
+[WMTWDMDevice.NT$ARCH$.Services]
+AddService = SampleWDMService, %SPSVCINST_ASSOCSERVICE%, WMT_WDM_Service_Install
+
+[WMT_WDM_Service_Install]
+DisplayName    = %ServiceDesc%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START 
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\wdk_mutex_tests.sys
+
+; ================= Strings =================
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ProviderString         = "FluxSec"
+StdMfg                 = "(Standard system devices)"
+DiskId1                = "wdk_mutex_tests Installation Disk #1"
+DeviceDesc             = "wdk_mutex_tests Device"
+ServiceDesc            = "wdk_mutex_tests Service"
+ClassName              = "wdk_mutex_tests"

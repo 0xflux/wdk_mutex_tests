@@ -1,0 +1,14 @@
+{
+    "cSpell.words": [
+        "Irql",
+        "kmutex",
+        "KWAIT",
+        "ntddk",
+        "NTSTATUS",
+        "PCUNICODE",
+        "PDEVICE",
+        "PIRP",
+        "PUNICODE",
+        "RAII"
+    ]
+}
