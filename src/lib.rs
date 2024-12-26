@@ -43,11 +43,11 @@ pub unsafe extern "system" fn driver_entry(
     //
 
     if KMutexTest::test_multithread_mutex_global_static() == false {
-        println!("Test failed.");
+        println!("[wdk-mutex-test] [-] Test test_multithread_mutex_global_static failed.");
         return STATUS_UNSUCCESSFUL;
     }
 
-    println!("[wdk-mutex-test] End of driver_entry, status: {}", status);
+    println!("[wdk-mutex-test] [+] All tests passed. NTSTATUS: {}", status);
     status
 }
 

@@ -93,6 +93,7 @@ impl KMutexTest {
         // Check the result
         //
         const RESULT_VAL: u32 = 1500;
+        
         let p = HEAP_MTX_PTR.load(Ordering::SeqCst);
         if !p.is_null() {
             let p = unsafe { &*p };
