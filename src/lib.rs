@@ -14,7 +14,7 @@ use test_kmutex::{KMutexTest, HEAP_MTX_PTR};
 use utils::ToU16Vec;
 use wdk::{nt_success, println};
 use wdk_alloc::WdkAllocator;
-use wdk_sys::{ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, RtlInitUnicodeString}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CREATE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, UNICODE_STRING};
+use wdk_sys::{ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, RtlInitUnicodeString}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CREATE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 mod utils;
 mod test_kmutex;
@@ -34,9 +34,20 @@ pub unsafe extern "system" fn driver_entry(
 
     let status = unsafe { configure_driver(driver, registry_path as *mut _) };
     if !nt_success(status) {
-        driver_exit(driver);
+        return status;
     }
 
+
+    //
+    // Run tests
+    //
+
+    if KMutexTest::test_multithread_mutex_global_static() == false {
+        println!("Test failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    println!("[wdk-mutex-test] End of driver_entry, status: {}", status);
     status
 }
 
@@ -70,13 +81,6 @@ pub unsafe extern "C" fn configure_driver(
         return res;
     }
     
-    // KMutex tests
-    KMutexTest::test_multithread_mutex_global_static();
-    // if  == false {
-    //     driver_exit(driver);
-    // }
-
-
 
     let res = unsafe { IoCreateSymbolicLink(&mut dos_name, &mut nt_name) };
     if res != 0 {
