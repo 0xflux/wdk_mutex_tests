@@ -10,7 +10,7 @@ extern crate wdk_panic;
 use core::ptr::null_mut;
 
 use alloc::boxed::Box;
-use test_kmutex::{KMutexTest, HEAP_MTX_PTR};
+use test_kmutex::{KMutexTest, HEAP_MTX_PTR, PTR_TO_MANUAL_POOL};
 use utils::ToU16Vec;
 use wdk::{nt_success, println};
 use wdk_alloc::WdkAllocator;
@@ -47,6 +47,21 @@ pub unsafe extern "system" fn driver_entry(
         return STATUS_UNSUCCESSFUL;
     }
 
+    if KMutexTest::test_multithread_mutex_global_static_manual_pool() == false {
+        println!("[wdk-mutex-test] [-] Test test_multithread_mutex_global_static_manual_pool failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if KMutexTest::test_to_owned() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if KMutexTest::test_to_owned_box() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned_box failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
     println!("[wdk-mutex-test] [+] All tests passed. NTSTATUS: {}", status);
     status
 }
@@ -65,6 +80,9 @@ pub unsafe extern "C" fn configure_driver(
     
     unsafe { RtlInitUnicodeString(&mut dos_name, dos_name_u16.as_ptr()) };
     unsafe { RtlInitUnicodeString(&mut nt_name, device_name_u16.as_ptr()) };
+
+    (unsafe { *driver }).MajorFunction[IRP_MJ_CREATE as usize] = Some(create_close);
+    (unsafe { *driver }).DriverUnload = Some(driver_exit);
 
     let mut device_object: PDEVICE_OBJECT = null_mut();
     let res = unsafe { IoCreateDevice(
@@ -93,9 +111,7 @@ pub unsafe extern "C" fn configure_driver(
     //
 
 
-    (unsafe { *driver }).MajorFunction[IRP_MJ_CREATE as usize] = Some(create_close);
     (unsafe { *device_object }).Flags |= DO_BUFFERED_IO;
-    (unsafe { *driver }).DriverUnload = Some(driver_exit);
 
     STATUS_SUCCESS
 }
@@ -115,6 +131,11 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
     // Clear up memory via RAII & Box
     //
     let p = HEAP_MTX_PTR.load(core::sync::atomic::Ordering::SeqCst);
+    if !p.is_null() {
+        let _ = unsafe { Box::from_raw(p) };
+    }
+
+    let p = PTR_TO_MANUAL_POOL.load(core::sync::atomic::Ordering::SeqCst);
     if !p.is_null() {
         let _ = unsafe { Box::from_raw(p) };
     }
