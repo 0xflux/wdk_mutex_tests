@@ -1,8 +1,8 @@
 use core::{ffi::c_void, ptr::{self, null_mut}, sync::atomic::{AtomicPtr, Ordering}};
 
 use alloc::{boxed::Box, vec::Vec};
-use wdk::println;
-use wdk_mutex::kmutex::KMutex;
+use wdk::{nt_success, println};
+use wdk_mutex::{grt::Grt, kmutex::KMutex};
 use wdk_sys::{ntddk::{ExAllocatePool2, ExFreePool, KeGetCurrentIrql, KeWaitForSingleObject, ObReferenceObjectByHandle, ObfDereferenceObject, PsCreateSystemThread, ZwClose}, APC_LEVEL, CLIENT_ID, FALSE, HANDLE, OBJECT_ATTRIBUTES, POOL_FLAG_NON_PAGED, PVOID, STATUS_SUCCESS, THREAD_ALL_ACCESS, _KWAIT_REASON::Executive, _MODE::KernelMode};
 
 pub static HEAP_MTX_PTR: AtomicPtr<KMutex<u32>> = AtomicPtr::new(null_mut());
@@ -278,4 +278,290 @@ impl KMutexTest {
         }
     }
 
+    pub fn test_grt_thrice() -> Result<(), ()> {
+        
+        test_grt()?;
+        
+        Ok(())
+    }
+
+}
+
+pub fn test_grt() -> Result<(), ()>{
+    let mut th = Vec::new();
+
+    let _ = Grt::register_mutex("my_test_mutex", 0u32);
+    
+    for _ in 0..3 {
+        let mut thread_handle: HANDLE = null_mut();
+
+        let status = unsafe {
+            PsCreateSystemThread(
+                &mut thread_handle, 
+                0, 
+                null_mut::<OBJECT_ATTRIBUTES>(), 
+                null_mut(),
+                null_mut::<CLIENT_ID>(), 
+                Some(callback_fn_grt), 
+                null_mut(),
+            )
+        };
+
+        if nt_success(status) {
+            th.push(thread_handle);
+        }
+    }
+
+    test_grt2()?;
+
+    //
+    // Join the thread handles
+    //
+
+    for thread_handle in th {
+
+        if !thread_handle.is_null() && unsafe{KeGetCurrentIrql()} <= APC_LEVEL as u8 {
+            let mut thread_obj: PVOID = null_mut();
+            let ref_status = unsafe {
+                ObReferenceObjectByHandle(
+                    thread_handle,
+                    THREAD_ALL_ACCESS,
+                    null_mut(),
+                    KernelMode as i8,
+                    &mut thread_obj,
+                    null_mut(),
+                )
+            };
+            unsafe { let _ = ZwClose(thread_handle); };
+
+            if ref_status == STATUS_SUCCESS {
+                unsafe {
+                    let _ = KeWaitForSingleObject(
+                        thread_obj,
+                        Executive,
+                        KernelMode as i8,
+                        FALSE as u8,
+                        null_mut(),
+                    );
+                }
+                
+            unsafe { ObfDereferenceObject(thread_obj) };
+            }
+        }
+    }
+
+    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex");
+    if let Err(e) = my_mut {
+        println!("Error in callback: {:?}", e);
+        return Err(());
+    }
+
+    let lock = my_mut.unwrap().lock().unwrap();
+    if *lock != 300 {
+        return Err(())
+    }
+
+    Ok(())
+
+}
+
+
+unsafe extern "C" fn callback_fn_grt(_: *mut c_void) {
+    for _ in 0..100 {
+        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex");
+        if let Err(e) = my_mut {
+            println!("Error in callback: {:?}", e);
+            return;
+        }
+
+        let mut lock = my_mut.unwrap().lock().unwrap();
+        *lock += 1;
+    }
+}
+
+
+
+pub fn test_grt2() -> Result<(), ()>{
+    let mut th = Vec::new();
+
+    if let Err(e) = Grt::register_mutex("my_test_mutex2", 0u32) {
+        println!("ERROR registering mutex: {:?}", e);
+        return Err(());
+    };
+
+    test_grt3()?;
+    
+    for _ in 0..3 {
+        let mut thread_handle: HANDLE = null_mut();
+
+        let status = unsafe {
+            PsCreateSystemThread(
+                &mut thread_handle, 
+                0, 
+                null_mut::<OBJECT_ATTRIBUTES>(), 
+                null_mut(),
+                null_mut::<CLIENT_ID>(), 
+                Some(callback_fn_grt_2), 
+                null_mut(),
+            )
+        };
+
+        if nt_success(status) {
+            th.push(thread_handle);
+        }
+    }
+
+    //
+    // Join the thread handles
+    //
+
+    for thread_handle in th {
+
+        if !thread_handle.is_null() && unsafe{KeGetCurrentIrql()} <= APC_LEVEL as u8 {
+            let mut thread_obj: PVOID = null_mut();
+            let ref_status = unsafe {
+                ObReferenceObjectByHandle(
+                    thread_handle,
+                    THREAD_ALL_ACCESS,
+                    null_mut(),
+                    KernelMode as i8,
+                    &mut thread_obj,
+                    null_mut(),
+                )
+            };
+            unsafe { let _ = ZwClose(thread_handle); };
+
+            if ref_status == STATUS_SUCCESS {
+                unsafe {
+                    let _ = KeWaitForSingleObject(
+                        thread_obj,
+                        Executive,
+                        KernelMode as i8,
+                        FALSE as u8,
+                        null_mut(),
+                    );
+                }
+                
+            unsafe { ObfDereferenceObject(thread_obj) };
+            }
+        }
+    }
+
+    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex2");
+    if let Err(e) = my_mut {
+        println!("Error in callback: {:?}", e);
+        return Err(());
+    }
+
+    let lock = my_mut.unwrap().lock().unwrap();
+    if *lock != 300 {
+        return Err(())
+    }
+    
+    Ok(())
+}
+
+unsafe extern "C" fn callback_fn_grt_2(_: *mut c_void) {
+    for _ in 0..100 {
+        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex2");
+        if let Err(e) = my_mut {
+            println!("Error in callback: {:?}", e);
+            return;
+        }
+
+        let mut lock = my_mut.unwrap().lock().unwrap();
+        *lock += 1;
+    }
+}
+
+
+
+pub fn test_grt3() -> Result<(), ()> {
+    let mut th = Vec::new();
+
+    if let Err(e) = Grt::register_mutex("my_test_mutex3", 0u32) {
+        println!("ERROR registering mutex: {:?}", e);
+        return Err(());
+    };
+
+    for _ in 0..3 {
+        let mut thread_handle: HANDLE = null_mut();
+
+        let status = unsafe {
+            PsCreateSystemThread(
+                &mut thread_handle, 
+                0, 
+                null_mut::<OBJECT_ATTRIBUTES>(), 
+                null_mut(),
+                null_mut::<CLIENT_ID>(), 
+                Some(callback_fn_grt_3), 
+                null_mut(),
+            )
+        };
+
+        if nt_success(status) {
+            th.push(thread_handle);
+        }
+    }
+
+    //
+    // Join the thread handles
+    //
+
+    for thread_handle in th {
+        if !thread_handle.is_null() && unsafe{KeGetCurrentIrql()} <= APC_LEVEL as u8 {
+            let mut thread_obj: PVOID = null_mut();
+            let ref_status = unsafe {
+                ObReferenceObjectByHandle(
+                    thread_handle,
+                    THREAD_ALL_ACCESS,
+                    null_mut(),
+                    KernelMode as i8,
+                    &mut thread_obj,
+                    null_mut(),
+                )
+            };
+            unsafe { let _ = ZwClose(thread_handle); };
+
+            if ref_status == STATUS_SUCCESS {
+                unsafe {
+                    let _ = KeWaitForSingleObject(
+                        thread_obj,
+                        Executive,
+                        KernelMode as i8,
+                        FALSE as u8,
+                        null_mut(),
+                    );
+                }
+                
+            unsafe { ObfDereferenceObject(thread_obj) };
+            }
+        }
+    }
+
+    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex3");
+    if let Err(e) = my_mut {
+        println!("Error in callback: {:?}", e);
+        return Err(());
+    }
+
+    let lock = my_mut.unwrap().lock().unwrap();
+    if *lock != 300 {
+        return Err(())
+    }
+
+    Ok(())
+}
+
+unsafe extern "C" fn callback_fn_grt_3(_: *mut c_void) {
+    for _ in 0..100 {
+        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex3");
+        if let Err(e) = my_mut {
+            println!("Error in callback: {:?}", e);
+            return;
+        }
+
+        let mut lock = my_mut.unwrap().lock().unwrap();
+        *lock += 1;
+    }
 }

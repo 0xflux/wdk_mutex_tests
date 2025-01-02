@@ -14,6 +14,7 @@ use test_kmutex::{KMutexTest, HEAP_MTX_PTR, PTR_TO_MANUAL_POOL};
 use utils::ToU16Vec;
 use wdk::{nt_success, println};
 use wdk_alloc::WdkAllocator;
+use wdk_mutex::grt::Grt;
 use wdk_sys::{ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, RtlInitUnicodeString}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CREATE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 mod utils;
@@ -62,6 +63,11 @@ pub unsafe extern "system" fn driver_entry(
         return STATUS_UNSUCCESSFUL;
     }
 
+    if KMutexTest::test_grt_thrice().is_err() {
+        println!("[wdk-mutex-test] [-] Test test_grt_thrice failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
     println!("[wdk-mutex-test] [+] All tests passed. NTSTATUS: {}", status);
     status
 }
@@ -71,6 +77,13 @@ pub unsafe extern "C" fn configure_driver(
     driver: *mut DRIVER_OBJECT,
     _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
+
+    // GRT
+    if let Err(e) = Grt::init() {
+        println!("Error creating Grt! {:?}", e);
+        return STATUS_UNSUCCESSFUL;
+    }
+
 
     let mut dos_name = UNICODE_STRING::default();
     let mut nt_name = UNICODE_STRING::default();
@@ -138,6 +151,10 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
     let p = PTR_TO_MANUAL_POOL.load(core::sync::atomic::Ordering::SeqCst);
     if !p.is_null() {
         let _ = unsafe { Box::from_raw(p) };
+    }
+
+    if let Err(e) = unsafe { Grt::destroy() } {
+        println!("Error destroying Grt: {:?}", e);
     }
 
     // delete the device
