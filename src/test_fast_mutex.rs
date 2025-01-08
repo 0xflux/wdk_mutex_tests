@@ -2,15 +2,16 @@ use core::{ffi::c_void, ptr::{self, null_mut}, sync::atomic::{AtomicPtr, Orderin
 
 use alloc::{boxed::Box, vec::Vec};
 use wdk::{nt_success, println};
-use wdk_mutex::{grt::Grt, kmutex::KMutex};
+use wdk_mutex::{fast_mutex::FastMutex, grt::Grt
+};
 use wdk_sys::{ntddk::{ExAllocatePool2, ExFreePool, KeGetCurrentIrql, KeWaitForSingleObject, ObReferenceObjectByHandle, ObfDereferenceObject, PsCreateSystemThread, ZwClose}, APC_LEVEL, CLIENT_ID, FALSE, HANDLE, OBJECT_ATTRIBUTES, POOL_FLAG_NON_PAGED, PVOID, STATUS_SUCCESS, THREAD_ALL_ACCESS, _KWAIT_REASON::Executive, _MODE::KernelMode};
 
-pub static HEAP_MTX_PTR: AtomicPtr<KMutex<u32>> = AtomicPtr::new(null_mut());
-pub static PTR_TO_MANUAL_POOL: AtomicPtr<KMutex<*mut u32>> = AtomicPtr::new(null_mut());
+pub static HEAP_FMTX_PTR: AtomicPtr<FastMutex<u32>> = AtomicPtr::new(null_mut());
+pub static PTR_TO_MANUAL_POOL_FM: AtomicPtr<FastMutex<*mut u32>> = AtomicPtr::new(null_mut());
 
-pub struct KMutexTest{}
+pub struct FastMutexTest{}
 
-impl KMutexTest {
+impl FastMutexTest {
     /// Tests the mutex by spawning three threads, and performing 500 mutable modifications to the
     /// T inside the mutex.
     /// 
@@ -21,9 +22,9 @@ impl KMutexTest {
         // Prepare global static for access in multiple threads.
         //
     
-        let heap_mtx = Box::new(KMutex::new(0u32).unwrap());
+        let heap_mtx = Box::new(FastMutex::new(0u32).unwrap());
         let heap_mtx_ptr = Box::into_raw(heap_mtx);
-        HEAP_MTX_PTR.store(heap_mtx_ptr, Ordering::SeqCst);
+        HEAP_FMTX_PTR.store(heap_mtx_ptr, Ordering::SeqCst);
 
         let mut th = Vec::new();
     
@@ -40,7 +41,7 @@ impl KMutexTest {
                     null_mut::<OBJECT_ATTRIBUTES>(), 
                     null_mut(),
                     null_mut::<CLIENT_ID>(), 
-                    Some(KMutexTest::callback_test_multithread_mutex_global_static), 
+                    Some(FastMutexTest::callback_test_multithread_mutex_global_static), 
                     null_mut(),
                 )
             };
@@ -95,7 +96,7 @@ impl KMutexTest {
         //
         const RESULT_VAL: u32 = 1500;
         
-        let p = HEAP_MTX_PTR.load(Ordering::SeqCst);
+        let p = HEAP_FMTX_PTR.load(Ordering::SeqCst);
         if !p.is_null() {
             let p = unsafe { &*p };
             if *p.lock().unwrap() != RESULT_VAL {
@@ -113,7 +114,7 @@ impl KMutexTest {
     /// Callback function for operating on a global static AtomicPtr
     unsafe extern "C" fn callback_test_multithread_mutex_global_static(_: *mut c_void) {
         for _ in 0..500 {
-            let p = HEAP_MTX_PTR.load(Ordering::SeqCst);
+            let p = HEAP_FMTX_PTR.load(Ordering::SeqCst);
             if !p.is_null() {
                 let p = unsafe { &*p };
                 let mut lock = p.lock().unwrap();
@@ -132,9 +133,9 @@ impl KMutexTest {
             ExAllocatePool2(POOL_FLAG_NON_PAGED, size_of::<u32>() as u64, u32::from_be_bytes(*b"kmtx"))
         } as *mut u32;
         unsafe {ptr::write(my_pool_allocation, 0u32)};
-        let my_mutex: *mut KMutex<*mut u32> = Box::into_raw(Box::new(KMutex::new(my_pool_allocation).unwrap()));
+        let my_mutex: *mut FastMutex<*mut u32> = Box::into_raw(Box::new(FastMutex::new(my_pool_allocation).unwrap()));
 
-        PTR_TO_MANUAL_POOL.store(my_mutex, Ordering::SeqCst);
+        PTR_TO_MANUAL_POOL_FM.store(my_mutex, Ordering::SeqCst);
 
         let mut th = Vec::new();
     
@@ -151,7 +152,7 @@ impl KMutexTest {
                     null_mut::<OBJECT_ATTRIBUTES>(), 
                     null_mut(),
                     null_mut::<CLIENT_ID>(), 
-                    Some(KMutexTest::callback_test_multithread_mutex_global_static_manual_pool), 
+                    Some(FastMutexTest::callback_test_multithread_mutex_global_static_manual_pool), 
                     null_mut(),
                 )
             };
@@ -204,17 +205,13 @@ impl KMutexTest {
         //
         const RESULT_VAL: u32 = 1500;
         
-        let p: *mut KMutex<*mut u32> = PTR_TO_MANUAL_POOL.load(Ordering::SeqCst);
+        let p: *mut FastMutex<*mut u32> = PTR_TO_MANUAL_POOL_FM.load(Ordering::SeqCst);
         if !p.is_null() {
-            let k: &KMutex<*mut u32> = unsafe { &*p };
+            let k: &FastMutex<*mut u32> = unsafe { &*p };
 
             let x = k.lock().unwrap();
             let y = unsafe { **x };
             
-            let b = unsafe { Box::from_raw(p) };
-            PTR_TO_MANUAL_POOL.store(null_mut(), Ordering::SeqCst);
-            unsafe { ExFreePool(*b.lock().unwrap() as *mut _) };
-
             if y != RESULT_VAL {
                 return false;
             }
@@ -228,7 +225,7 @@ impl KMutexTest {
     
     unsafe extern "C" fn callback_test_multithread_mutex_global_static_manual_pool(_: *mut c_void) {
         for _ in 0..500 {
-            let p = PTR_TO_MANUAL_POOL.load(Ordering::SeqCst);
+            let p = PTR_TO_MANUAL_POOL_FM.load(Ordering::SeqCst);
             if !p.is_null() {
                 let p = unsafe { &*p };
                 let mut lock = p.lock().unwrap();
@@ -245,7 +242,7 @@ impl KMutexTest {
     pub fn test_to_owned() -> bool {
         
         // testing to_owned
-        let m = KMutex::new(0u8).unwrap();
+        let m = FastMutex::new(0u8).unwrap();
         {
             let mut lock = m.lock().unwrap();
             *lock += 1;
@@ -263,7 +260,7 @@ impl KMutexTest {
     pub fn test_to_owned_box() -> bool {
         
         // testing to_owned
-        let m = KMutex::new(0u8).unwrap();
+        let m = FastMutex::new(0u8).unwrap();
         {
             let mut lock = m.lock().unwrap();
             *lock += 1;
@@ -290,7 +287,7 @@ impl KMutexTest {
 pub fn test_grt() -> Result<(), ()>{
     let mut th = Vec::new();
 
-    let _ = Grt::register_kmutex("my_test_mutex", 0u32);
+    let _ = Grt::register_fast_mutex("my_test_mutex", 0u32);
     
     for _ in 0..3 {
         let mut thread_handle: HANDLE = null_mut();
@@ -350,7 +347,7 @@ pub fn test_grt() -> Result<(), ()>{
         }
     }
 
-    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex");
+    let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex");
     if let Err(e) = my_mut {
         println!("Error in callback: {:?}", e);
         return Err(());
@@ -368,7 +365,7 @@ pub fn test_grt() -> Result<(), ()>{
 
 unsafe extern "C" fn callback_fn_grt(_: *mut c_void) {
     for _ in 0..100 {
-        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex");
+        let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex");
         if let Err(e) = my_mut {
             println!("Error in callback: {:?}", e);
             return;
@@ -384,7 +381,7 @@ unsafe extern "C" fn callback_fn_grt(_: *mut c_void) {
 pub fn test_grt2() -> Result<(), ()>{
     let mut th = Vec::new();
 
-    if let Err(e) = Grt::register_kmutex("my_test_mutex2", 0u32) {
+    if let Err(e) = Grt::register_fast_mutex("my_test_mutex2", 0u32) {
         println!("ERROR registering mutex: {:?}", e);
         return Err(());
     };
@@ -447,7 +444,7 @@ pub fn test_grt2() -> Result<(), ()>{
         }
     }
 
-    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex2");
+    let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex2");
     if let Err(e) = my_mut {
         println!("Error in callback: {:?}", e);
         return Err(());
@@ -463,7 +460,7 @@ pub fn test_grt2() -> Result<(), ()>{
 
 unsafe extern "C" fn callback_fn_grt_2(_: *mut c_void) {
     for _ in 0..100 {
-        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex2");
+        let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex2");
         if let Err(e) = my_mut {
             println!("Error in callback: {:?}", e);
             return;
@@ -479,7 +476,7 @@ unsafe extern "C" fn callback_fn_grt_2(_: *mut c_void) {
 pub fn test_grt3() -> Result<(), ()> {
     let mut th = Vec::new();
 
-    if let Err(e) = Grt::register_kmutex("my_test_mutex3", 0u32) {
+    if let Err(e) = Grt::register_fast_mutex("my_test_mutex3", 0u32) {
         println!("ERROR registering mutex: {:?}", e);
         return Err(());
     };
@@ -539,7 +536,7 @@ pub fn test_grt3() -> Result<(), ()> {
         }
     }
 
-    let my_mut = Grt::get_kmutex::<u32>("my_test_mutex3");
+    let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex3");
     if let Err(e) = my_mut {
         println!("Error in callback: {:?}", e);
         return Err(());
@@ -555,7 +552,7 @@ pub fn test_grt3() -> Result<(), ()> {
 
 unsafe extern "C" fn callback_fn_grt_3(_: *mut c_void) {
     for _ in 0..100 {
-        let my_mut = Grt::get_kmutex::<u32>("my_test_mutex3");
+        let my_mut = Grt::get_fast_mutex::<u32>("my_test_mutex3");
         if let Err(e) = my_mut {
             println!("Error in callback: {:?}", e);
             return;

@@ -10,6 +10,7 @@ extern crate wdk_panic;
 use core::ptr::null_mut;
 
 use alloc::boxed::Box;
+use test_fast_mutex::{FastMutexTest, HEAP_FMTX_PTR, PTR_TO_MANUAL_POOL_FM};
 use test_kmutex::{KMutexTest, HEAP_MTX_PTR, PTR_TO_MANUAL_POOL};
 use utils::ToU16Vec;
 use wdk::{nt_success, println};
@@ -19,6 +20,7 @@ use wdk_sys::{ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDe
 
 mod utils;
 mod test_kmutex;
+mod test_fast_mutex;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WdkAllocator = WdkAllocator;
@@ -40,7 +42,7 @@ pub unsafe extern "system" fn driver_entry(
 
 
     //
-    // Run tests
+    // Run Kmutex tests
     //
 
     if KMutexTest::test_multithread_mutex_global_static() == false {
@@ -64,11 +66,41 @@ pub unsafe extern "system" fn driver_entry(
     }
 
     if KMutexTest::test_grt_thrice().is_err() {
-        println!("[wdk-mutex-test] [-] Test test_grt_thrice failed.");
+        println!("[wdk-mutex-test] [-] Test KMutexTest::test_grt_thrice failed.");
         return STATUS_UNSUCCESSFUL;
     }
 
-    println!("[wdk-mutex-test] [+] All tests passed. NTSTATUS: {}", status);
+
+    //
+    // Run FastMutex tests
+    //
+
+    if FastMutexTest::test_multithread_mutex_global_static() == false {
+        println!("[wdk-mutex-test] [-] Test test_multithread_mutex_global_static failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if FastMutexTest::test_multithread_mutex_global_static_manual_pool() == false {
+        println!("[wdk-mutex-test] [-] Test test_multithread_mutex_global_static_manual_pool failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if FastMutexTest::test_to_owned() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if FastMutexTest::test_to_owned_box() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned_box failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if FastMutexTest::test_grt_thrice().is_err() {
+        println!("[wdk-mutex-test] [-] Test FastMutexTest::test_grt_thrice failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    println!("[wdk-mutex-test] [+] All tests passed! NTSTATUS: {}", status);
     status
 }
 
@@ -149,6 +181,16 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
     }
 
     let p = PTR_TO_MANUAL_POOL.load(core::sync::atomic::Ordering::SeqCst);
+    if !p.is_null() {
+        let _ = unsafe { Box::from_raw(p) };
+    }
+
+    let p = HEAP_FMTX_PTR.load(core::sync::atomic::Ordering::SeqCst);
+    if !p.is_null() {
+        let _ = unsafe { Box::from_raw(p) };
+    }
+
+    let p = PTR_TO_MANUAL_POOL_FM.load(core::sync::atomic::Ordering::SeqCst);
     if !p.is_null() {
         let _ = unsafe { Box::from_raw(p) };
     }
