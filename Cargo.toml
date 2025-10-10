@@ -9,14 +9,16 @@ crate-type = ["cdylib"]
 test = false
 
 [package.metadata.wdk.driver-model]
-driver-type = "WDM"
+driver-type = "KMDF"
+kmdf-version-major = 1
+target-kmdf-version-minor = 33
 
 [dependencies]
 wdk = "0.3"
 wdk-alloc = "0.3"
-wdk-panic = "0.3"
+wdk-panic = "0.3" 
 wdk-sys = "0.4"
-wdk-mutex = { git = "https://github.com/0xflux/wdk-mutex", rev = "918849d132aed6d284b6435c069d40dca89d38ab" }
+wdk-mutex = { git = "https://github.com/0xflux/wdk-mutex", rev = "54a00c86d3d658357f275a36d9619cfd3a47214f", features = ["driver-kmdf"]}
 
 [build-dependencies]
 wdk-build = "0.4"
