@@ -741,7 +741,8 @@ dependencies = [
 [[package]]
 name = "wdk-mutex"
 version = "1.2.0"
-source = "git+https://github.com/0xflux/wdk-mutex?rev=4dfbbe16e04687bfc9ecb6b90b1f798569aa83e7#4dfbbe16e04687bfc9ecb6b90b1f798569aa83e7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2af801c4458d663fee2fd7490d928b8d9636fb393e0a89f86c45fbce4e8bbe1"
 dependencies = [
  "wdk",
  "wdk-alloc",
