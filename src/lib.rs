@@ -2,6 +2,13 @@
 //! https://github.com/0xflux/wdk-mutex
 
 #![no_std]
+
+#[cfg(not(any(
+    driver_model__driver_type = "WDM",
+    driver_model__driver_type = "KMDF"
+)))]
+compile_error!("driver_model__driver_type cfg not set - set RUSTFLAGS or use WDK-aware build.");
+
 extern crate alloc;
 
 #[cfg(not(test))]

@@ -741,7 +741,7 @@ dependencies = [
 [[package]]
 name = "wdk-mutex"
 version = "1.2.0"
-source = "git+https://github.com/0xflux/wdk-mutex?rev=92bcbdea2f54cf8a44fad0254786637e5aa14a77#92bcbdea2f54cf8a44fad0254786637e5aa14a77"
+source = "git+https://github.com/0xflux/wdk-mutex?rev=4dfbbe16e04687bfc9ecb6b90b1f798569aa83e7#4dfbbe16e04687bfc9ecb6b90b1f798569aa83e7"
 dependencies = [
  "wdk",
  "wdk-alloc",
