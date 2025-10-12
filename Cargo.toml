@@ -18,7 +18,7 @@ wdk = "0.3"
 wdk-alloc = "0.3"
 wdk-panic = "0.3" 
 wdk-sys = "0.4"
-wdk-mutex = { git = "https://github.com/0xflux/wdk-mutex", rev = "54a00c86d3d658357f275a36d9619cfd3a47214f", features = ["driver-kmdf"]}
+wdk-mutex = { git = "https://github.com/0xflux/wdk-mutex", rev = "92bcbdea2f54cf8a44fad0254786637e5aa14a77" }
 
 [build-dependencies]
 wdk-build = "0.4"
