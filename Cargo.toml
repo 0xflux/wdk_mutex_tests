@@ -12,14 +12,15 @@ test = false
 driver-type = "WDM"
 
 [dependencies]
-wdk = "0.3"
-wdk-alloc = "0.3"
-wdk-panic = "0.3" 
-wdk-sys = "0.4"
-wdk-mutex = "1.2.0"
+wdk = "0.4"
+wdk-alloc = "0.4"
+wdk-panic = "0.4" 
+wdk-sys = "0.5"
+wdk-mutex = "1.3.2"
+# wdk-mutex = { path = "../wdk_mutex", version = "1.3.2" }
 
 [build-dependencies]
-wdk-build = "0.4"
+wdk-build = "0.5"
 
 [profile.dev]
 panic = "abort"

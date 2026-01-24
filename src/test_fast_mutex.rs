@@ -257,6 +257,24 @@ impl FastMutexTest {
         }
     }
 
+    pub fn test_to_owned_inner_boxed() -> bool {
+        
+        // testing to_owned
+        let m = FastMutex::new(Box::new(0u8)).unwrap();
+        {
+            let mut lock = m.lock().unwrap();
+            **lock += 1;
+        }
+
+        let x = unsafe { m.to_owned() };
+
+        if *x == 1 {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn test_to_owned_box() -> bool {
         
         // testing to_owned

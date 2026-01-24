@@ -67,6 +67,11 @@ pub unsafe extern "system" fn driver_entry(
         return STATUS_UNSUCCESSFUL;
     }
 
+    if KMutexTest::test_to_owned_inner_boxed() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned_inner_boxed failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
     if KMutexTest::test_to_owned_box() == false {
         println!("[wdk-mutex-test] [-] Test test_to_owned_box failed.");
         return STATUS_UNSUCCESSFUL;
@@ -94,6 +99,11 @@ pub unsafe extern "system" fn driver_entry(
 
     if FastMutexTest::test_to_owned() == false {
         println!("[wdk-mutex-test] [-] Test test_to_owned failed.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if FastMutexTest::test_to_owned_inner_boxed() == false {
+        println!("[wdk-mutex-test] [-] Test test_to_owned_inner_boxed failed.");
         return STATUS_UNSUCCESSFUL;
     }
 
